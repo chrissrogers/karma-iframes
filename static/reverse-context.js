@@ -1,92 +1,97 @@
+"use strict";
+
 // Mock the __karma__ to be used inside the iframe
 // Send progress to the parent frame for iframes-adapter to send to the real __karma__ of the real context
+window.__karma__ = function (hasParent) {
+  if (!hasParent) {
+    // Someone has opened this frame manually → inject the normal context.js
+    document.write('<script src="/context.js" type="application/javascript"></script>');
+    document.write('<script src="/debug.js" type="application/javascript"></script>');
+    return window.__karma__;
+  }
 
-window.__karma__ = (function(hasParent) {
-	if(!hasParent) {
-		// Someone has opened this frame manually → inject the normal context.js
-		document.write('<script src="/context.js" type="application/javascript"></script>');
-		document.write('<script src="/debug.js" type="application/javascript"></script>');
-		return window.__karma__;
-	}
+  function UNIMPLEMENTED_START() {
+    throw new Error('An adapter should provide the start function');
+  }
 
-	function UNIMPLEMENTED_START() {
-		throw new Error('An adapter should provide the start function');
-	}
+  var karma = {
+    start: UNIMPLEMENTED_START,
+    setupContext: setupContext
+  };
 
-	var karma = {
-		start: UNIMPLEMENTED_START,
-		setupContext: setupContext
-	};
+  function callParentKarmaMethod(methodName, args) {
+    args.unshift('iframe-test-results', methodName);
 
-	function callParentKarmaMethod(methodName, args) {
-		args.unshift('iframe-test-results', methodName);
-		for (var i = 2, l = args.length; i < l; ++i) {
-			if (args[i] instanceof Error) {
-				args[i] = {
-					'@@_serializedErrorFromIFrame': true,
-					name: args[i].name,
-					message: args[i].message,
-					stack: args[i].stack
-				};
-			}
-		}
-		window.parent.postMessage(args, window.location.origin);
-	}
+    for (var i = 2, l = args.length; i < l; ++i) {
+      if (args[i] instanceof Error) {
+        args[i] = {
+          '@@_serializedErrorFromIFrame': true,
+          name: args[i].name,
+          message: args[i].message,
+          stack: args[i].stack
+        };
+      }
+    }
 
-	function postToMainContext(message, arg) {
-		callParentKarmaMethod(message, [arg]);
-	}
+    window.parent.postMessage(args, window.location.origin);
+  }
 
-	DIRECT_METHODS = ['error', 'log', 'complete', 'result'];
-	DIRECT_METHODS.forEach(method => {
-		karma[method] = function() {
-			callParentKarmaMethod(method, Array.prototype.slice.call(arguments));
-		}
-		karma[method].displayName = method+' (proxied)';
-	});
+  function postToMainContext(message, arg) {
+    callParentKarmaMethod(message, [arg]);
+  }
 
-	karma.info = function(info) {
-		if('total' in info) {
-			return postToMainContext('started', info.total);
-		}
-		callParentKarmaMethod('info', Array.prototype.slice.call(arguments));
-	}
-	
-	karma.loaded = function(loaded) {
-		// all files loaded, let's start the execution
-		this.start(this.config)
-		// remove reference to child iframe
-		this.start = UNIMPLEMENTED_START
-	};
+  DIRECT_METHODS = ['error', 'log', 'complete', 'result'];
+  DIRECT_METHODS.forEach(function (method) {
+    karma[method] = function () {
+      callParentKarmaMethod(method, Array.prototype.slice.call(arguments));
+    };
 
-	function setupContext(contextWindow) {
-		// Perform window level bindings
-		// DEV: We return `karma.error` since we want to `return false` to ignore errors
-		contextWindow.onerror = function () {
-			return karma.error.apply(karma, arguments)
-		}
+    karma[method].displayName = method + ' (proxied)';
+  });
 
-		contextWindow.dump = function () {
-			karma.log('dump', arguments)
-		}
+  karma.info = function (info) {
+    if ('total' in info) {
+      return postToMainContext('started', info.total);
+    }
 
-		var _confirm = contextWindow.confirm
-		var _prompt = contextWindow.prompt
+    callParentKarmaMethod('info', Array.prototype.slice.call(arguments));
+  };
 
-		contextWindow.alert = function (msg) {
-			karma.log('alert', [msg])
-		}
+  karma.loaded = function (loaded) {
+    // all files loaded, let's start the execution
+    this.start(this.config); // remove reference to child iframe
 
-		contextWindow.confirm = function (msg) {
-			karma.log('confirm', [msg])
-			return _confirm(msg)
-		}
+    this.start = UNIMPLEMENTED_START;
+  };
 
-		contextWindow.prompt = function (msg, defaultVal) {
-			karma.log('prompt', [msg, defaultVal])
-			return _prompt(msg, defaultVal)
-		}
-	}
+  function setupContext(contextWindow) {
+    // Perform window level bindings
+    // DEV: We return `karma.error` since we want to `return false` to ignore errors
+    contextWindow.onerror = function () {
+      return karma.error.apply(karma, arguments);
+    };
 
-	return karma;
-})(window.parent !== window);
+    contextWindow.dump = function () {
+      karma.log('dump', arguments);
+    };
+
+    var _confirm = contextWindow.confirm;
+    var _prompt = contextWindow.prompt;
+
+    contextWindow.alert = function (msg) {
+      karma.log('alert', [msg]);
+    };
+
+    contextWindow.confirm = function (msg) {
+      karma.log('confirm', [msg]);
+      return _confirm(msg);
+    };
+
+    contextWindow.prompt = function (msg, defaultVal) {
+      karma.log('prompt', [msg, defaultVal]);
+      return _prompt(msg, defaultVal);
+    };
+  }
+
+  return karma;
+}(window.parent !== window);

@@ -9,6 +9,7 @@
     "lib"
   ],
   "scripts": {
+    "build": "./node_modules/.bin/babel src -d lib && ./node_modules/.bin/babel static-src -d static",
     "test": "RUN_IN_PARENT=true npm run test-try-twice && RUN_IN_PARENT=false npm run test-try-twice",
     "test-try-twice": "npm run test-run || npm run test-run",
     "test-run": "karma start --single-run"
@@ -24,6 +25,9 @@
   "author": "Raphael Schweikert <any@sabberworm.com>",
   "license": "GPL-3.0",
   "devDependencies": {
+    "@babel/cli": "^7.7.0",
+    "@babel/core": "^7.7.2",
+    "@babel/preset-env": "^7.7.1",
     "chai": "^4.1.2",
     "karma": "^3.1.1",
     "karma-chai": "^0.1.0",

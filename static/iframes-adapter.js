@@ -1,326 +1,365 @@
+"use strict";
+
+function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest(); }
+
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance"); }
+
+function _iterableToArrayLimit(arr, i) { if (!(Symbol.iterator in Object(arr) || Object.prototype.toString.call(arr) === "[object Arguments]")) { return; } var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
 // jshint es3: false
 // jshint esversion: 6
+(function (karma) {
+  'use strict';
 
-(function(karma) {
-	'use strict';
-	
-	var isDebug = document.location.href.indexOf('debug.html') > -1;
+  var isDebug = document.location.href.indexOf('debug.html') > -1;
 
-	function Suite(path, showTitle) {
-		// state is one of
-		// • 'pending' (before the total is known)
-		// • 'started' (after total is known but before all suites have executed)
-		// • 'complete' (when total === finished)
-		this.state = 'pending';
-		this.fileName = path.match(/\/([^/]+)\.iframe\.html$/)[1];
-		this.path = path;
-		this.iframe = document.createElement('iframe');
-		this.wrapper = document.createElement('span');
-		this.showTitle = showTitle;
-		this.total = NaN;
-		this.finished = 0;
-	}
-	
-	Suite.prototype.init = function(suites) {
-		if(isDebug) {
-			console.debug(`Loaded suite ${this.fileName}`);
-		}
-		var suite = this;
-		// Add the suite as pending
-		suites[this.path] = suite;
-		
-		var iframe = this.iframe;
+  function Suite(path, showTitle) {
+    // state is one of
+    // • 'pending' (before the total is known)
+    // • 'started' (after total is known but before all suites have executed)
+    // • 'complete' (when total === finished)
+    this.state = 'pending';
+    this.fileName = path.match(/\/([^/]+)\.iframe\.html$/)[1];
+    this.path = path;
+    this.iframe = document.createElement('iframe');
+    this.wrapper = document.createElement('span');
+    this.showTitle = showTitle;
+    this.total = NaN;
+    this.finished = 0;
+  }
 
-		// Remap console
-		iframe.addEventListener('DOMContentLoaded', () => {
-			iframe.contentWindow.console = console;
-		}, false);
-		
-		// Listen to messages from the iFrame
-		this.messageListener = (msg) => {
-			if(!msg.source || iframe.contentWindow !== msg.source) {
-				return; // ignore messages from other iframes
-			}
+  Suite.prototype.init = function (suites) {
+    var _this = this;
 
-			// Provide some namespace for the message
-			if(!Array.isArray(msg.data) || msg.data[0] !== 'iframe-test-results') {
-				return;
-			}
+    if (isDebug) {
+      console.debug("Loaded suite ".concat(this.fileName));
+    }
 
-			var message = msg.data[1];
-			var arg = msg.data[2];
+    var suite = this; // Add the suite as pending
 
-			if(message === 'started') {
-				this.started(arg);
-			} else if(message === 'result') {
-				this.result(arg);
-			} else if(message === 'complete') {
-				this.complete(arg);
-			} else {
-				// Other message (log, error); send directly to karma
-				var args = msg.data.slice(2)
-					.map(arg => {
-						if (typeof arg === 'object' && '@@_serializedErrorFromIFrame' in arg) {
-							var newError = new Error(arg.message);
-							newError.name = arg.name;
-							newError.stack = arg.stack;
-							return newError;
-						}
-						return arg;
-					});
-				karma[message].apply(karma, args);
-			}
-		};
-		window.addEventListener('message', this.messageListener, false);
-	};
+    suites[this.path] = suite;
+    var iframe = this.iframe; // Remap console
 
-	Suite.prototype.run = function() {
-		if(isDebug) {
-			console.debug(`Running suite ${this.fileName}`);
-		}
-		if (this.showTitle) {
-			this.wrapper.style.float = 'left';
-			this.wrapper.innerHTML = this.fileName + '<br>';
-		}
-		this.wrapper.appendChild(this.iframe);
-		this.iframe.src = this.path;
-		document.body.appendChild(this.wrapper)
-	};
+    iframe.addEventListener('DOMContentLoaded', function () {
+      iframe.contentWindow.console = console;
+    }, false); // Listen to messages from the iFrame
 
-	Suite.prototype.started = function(total) {
-		if(isDebug) {
-			console.debug(`Suite ${this.fileName} has started, expects ${total} tests`);
-		}
-		this.state = 'started';
-		this.total = total;
-		suiteStarted();
-	};
+    this.messageListener = function (msg) {
+      if (!msg.source || iframe.contentWindow !== msg.source) {
+        return; // ignore messages from other iframes
+      } // Provide some namespace for the message
 
-	Suite.prototype.result = function(result) {
-		if(isDebug) {
-			console.debug(`Suite ${this.fileName} has a result, ${result}`);
-		}
-		result.suite = result.suite || [];
-		result.suite.unshift(this.fileName.replace(/\.iframe\.html$/, ''));
-		result.id = this.fileName+'#'+(result.id || '');
-		this.finished++;
-		sendResult(result);
-	};
 
-	Suite.prototype.complete = function(result) {
-		if(isDebug) {
-			console.debug(`Suite ${this.fileName} has completed with ${this.finished} of ${this.total} tests`);
-		}
-		this.state = 'complete';
-		suiteComplete(result);
-		this.onComplete();
-		this.cleanup();
-	};
+      if (!Array.isArray(msg.data) || msg.data[0] !== 'iframe-test-results') {
+        return;
+      }
 
-	Suite.prototype.onComplete = function() {};
-	
-	Suite.prototype.cleanup = function() {
-		this.iframe.parentNode.removeChild(this.iframe);
-		this.wrapper.parentNode.removeChild(this.wrapper);
-		window.removeEventListener('message', this.messageListener, false);
-		this.iframe = null;
-		this.wrapper = null;
-		this.messageListener = null;
-	}
+      var message = msg.data[1];
+      var arg = msg.data[2];
 
-	// Map suite files to suite instances
-	var suites = {};
-	
-	function suitesWithState(state) {
-		let isNeg = state[0] === '!';
-		if(isNeg) {
-			state = state.substr(1);
-		}
-		let result = {};
-		Object.keys(suites)
-			.filter(path => {
-				return isNeg ? suites[path].state !== state : suites[path].state === state;
-			})
-			.forEach(path => {
-				result[path] = suites[path];
-			});
-		return result;
-	};
+      if (message === 'started') {
+        _this.started(arg);
+      } else if (message === 'result') {
+        _this.result(arg);
+      } else if (message === 'complete') {
+        _this.complete(arg);
+      } else {
+        // Other message (log, error); send directly to karma
+        var args = msg.data.slice(2).map(function (arg) {
+          if (_typeof(arg) === 'object' && '@@_serializedErrorFromIFrame' in arg) {
+            var newError = new Error(arg.message);
+            newError.name = arg.name;
+            newError.stack = arg.stack;
+            return newError;
+          }
 
-	function countTests() {
-		return Object.keys(suites)
-			.map(path => suites[path])
-			.reduce(([total, finished], suite) => {
-				total += suite.total;
-				finished += suite.finished;
-				return [total, finished];
-			}, [0, 0]);
-	}
+          return arg;
+        });
+        karma[message].apply(karma, args);
+      }
+    };
 
-	function hasPendingSuites() {
-		let startedSuites = suitesWithState('!pending');
-		return Object.keys(startedSuites).length < Object.keys(suites).length;
-	}
+    window.addEventListener('message', this.messageListener, false);
+  };
 
-	var pendingResults = [];
-	function sendResult(result) {
-		if(hasPendingSuites()) {
-			// We should not send results to karma before all suites have started, queue them
-			pendingResults.push(result);
-			return;
-		}
-		// Send result directly
-		karma.result(result);
-	}
-	
-	// Some suite has started
-	function suiteStarted() {
-		// Have all suites started?
-		if(hasPendingSuites()) {
-			return;
-		}
-		// All suites have started, send the total to karma
-		let [total, finished] = countTests();
-		if(isDebug) {
-			console.debug(`All ${Object.keys(suites).length} suites have started, expecting ${total} tests (of which ${finished} have already finished)`);
-		}
-		karma.info({total});
-		// Send the pending results
-		pendingResults.forEach(sendResult);
-		pendingResults = [];
-	}
+  Suite.prototype.run = function () {
+    if (isDebug) {
+      console.debug("Running suite ".concat(this.fileName));
+    }
 
-	// Some suite has completed
-	function suiteComplete(result) {
-		if (result.coverage) {
-			coverageCollector.addCoverage(result.coverage);
-		}
+    if (this.showTitle) {
+      this.wrapper.style["float"] = 'left';
+      this.wrapper.innerHTML = this.fileName + '<br>';
+    }
 
-		// Have all suites completed?
-		let completedSuites = suitesWithState('complete');
-		if(Object.keys(completedSuites).length < Object.keys(suites).length) {
-			return;
-		}
-		// All suites have completed, send the “complete” message to karma
-		if(isDebug) {
-			let [total, finished] = countTests();
-			console.debug(`All ${Object.keys(suites).length} suites have completed, ran ${finished} of ${total} tests`);
-		}
-		if (result.coverage) {
-			result.coverage = coverageCollector.getFinalCoverage();
-		}
-		karma.complete(result);
-	}
+    this.wrapper.appendChild(this.iframe);
+    this.iframe.src = this.path;
+    document.body.appendChild(this.wrapper);
+  };
 
-	function start () {
-		// jshint validthis: true
-		let files = Object.keys(karma.files).filter(file => file.match(/\.iframe\.html$/));
+  Suite.prototype.started = function (total) {
+    if (isDebug) {
+      console.debug("Suite ".concat(this.fileName, " has started, expects ").concat(total, " tests"));
+    }
 
-		let concurrency = parseInt(karma.config.concurrency, 10) || 10;
-		let showFrameTitle = karma.config.showFrameTitle || false;
-		let ran = 0;
-		let preparedSuites = [];
-		preparedSuites = files.map(file => {
-			let suite = new Suite(file, showFrameTitle);
-			suite.init(suites);
-			return suite;
-		});
+    this.state = 'started';
+    this.total = total;
+    suiteStarted();
+  };
 
-		if(isDebug) {
-			let debugLinks = document.createElement('div');
-			preparedSuites.forEach(suite => {
-				let link = document.createElement('a');
-				link.href = suite.path;
-				link.target = '_blank';
-				link.style.display = 'block';
-				link.appendChild(document.createTextNode(suite.fileName));
-				debugLinks.appendChild(link);
-			});
-			document.body.insertBefore(debugLinks, document.body.firstChild);
-		}
+  Suite.prototype.result = function (result) {
+    if (isDebug) {
+      console.debug("Suite ".concat(this.fileName, " has a result, ").concat(result));
+    }
 
-		preparedSuites.reverse();
+    result.suite = result.suite || [];
+    result.suite.unshift(this.fileName.replace(/\.iframe\.html$/, ''));
+    result.id = this.fileName + '#' + (result.id || '');
+    this.finished++;
+    sendResult(result);
+  };
 
-		function runNextSuite () {
-			let suite = preparedSuites.pop();
-			if (!suite) {
-				return;
-			}
-			suite.onComplete = function () {
-				ran--;
-				runNextSuite();
-			};
-			suite.run();
-			ran++;
-			if (ran < concurrency) {
-				setTimeout(runNextSuite, 0);
-			}
-		}
+  Suite.prototype.complete = function (result) {
+    if (isDebug) {
+      console.debug("Suite ".concat(this.fileName, " has completed with ").concat(this.finished, " of ").concat(this.total, " tests"));
+    }
 
-		runNextSuite();
-	}
+    this.state = 'complete';
+    suiteComplete(result);
+    this.onComplete();
+    this.cleanup();
+  };
 
-	//
-	// Helper to collect coverages from each suite
-	// (supports only one coverage format)
-	//
-	var coverageCollector = {
-		coverages: [],
-		addCoverage: function (coverage) {
-			this.coverages.push(coverage);
-		},
+  Suite.prototype.onComplete = function () {};
 
-		getFinalCoverage: function () {
-			var coverages = this.coverages;
-			return coverages.length ? this.mergeCoverages(coverages) : null;
-		},
+  Suite.prototype.cleanup = function () {
+    this.iframe.parentNode.removeChild(this.iframe);
+    this.wrapper.parentNode.removeChild(this.wrapper);
+    window.removeEventListener('message', this.messageListener, false);
+    this.iframe = null;
+    this.wrapper = null;
+    this.messageListener = null;
+  }; // Map suite files to suite instances
 
-		mergeCoverages: function (coverages) {
-			var mergedCoverage = {},
-				collector = this;
 
-			coverages.forEach(function (coverageBySrc) {
-				Object.keys(coverageBySrc).forEach(function (srcKey) {
-					if (!(srcKey in mergedCoverage)) {
-						mergedCoverage[srcKey] = collector.dirtyClone(coverageBySrc[srcKey]);
-						return;
-					}
+  var suites = {};
 
-					var masterCoverage = mergedCoverage[srcKey],
-						coverage = coverageBySrc[srcKey];
+  function suitesWithState(state) {
+    var isNeg = state[0] === '!';
 
-					// b - branches,
-					['b'].forEach(function (prop) {
-						if (!coverage[prop]) {
-							return;
-						}
-						Object.keys(coverage[prop]).forEach(function (branch) {
-							if (!coverage[prop][branch]) {
-								return;
-							}
-							(masterCoverage[prop][branch] || []).forEach(function (value, index) {
-								masterCoverage[prop][branch][index] += (coverage[prop][branch] || [])[index] || 0;
-							});
-						});
-					});
+    if (isNeg) {
+      state = state.substr(1);
+    }
 
-					// f - functions, s - statements
-					['f', 's'].forEach(function (prop) {
-						Object.keys(masterCoverage[prop]).forEach(function (index) {
-							masterCoverage[prop][index] += (coverage[prop] || [])[index] || 0;
-						});
-					});
-				});
-			});
+    var result = {};
+    Object.keys(suites).filter(function (path) {
+      return isNeg ? suites[path].state !== state : suites[path].state === state;
+    }).forEach(function (path) {
+      result[path] = suites[path];
+    });
+    return result;
+  }
 
-			return mergedCoverage;
-		},
+  ;
 
-		dirtyClone: function (object) {
-			return JSON.parse(JSON.stringify(object));
-		}
-	};
+  function countTests() {
+    return Object.keys(suites).map(function (path) {
+      return suites[path];
+    }).reduce(function (_ref, suite) {
+      var _ref2 = _slicedToArray(_ref, 2),
+          total = _ref2[0],
+          finished = _ref2[1];
 
-	karma.start = start;
+      total += suite.total;
+      finished += suite.finished;
+      return [total, finished];
+    }, [0, 0]);
+  }
+
+  function hasPendingSuites() {
+    var startedSuites = suitesWithState('!pending');
+    return Object.keys(startedSuites).length < Object.keys(suites).length;
+  }
+
+  var pendingResults = [];
+
+  function sendResult(result) {
+    if (hasPendingSuites()) {
+      // We should not send results to karma before all suites have started, queue them
+      pendingResults.push(result);
+      return;
+    } // Send result directly
+
+
+    karma.result(result);
+  } // Some suite has started
+
+
+  function suiteStarted() {
+    // Have all suites started?
+    if (hasPendingSuites()) {
+      return;
+    } // All suites have started, send the total to karma
+
+
+    var _countTests = countTests(),
+        _countTests2 = _slicedToArray(_countTests, 2),
+        total = _countTests2[0],
+        finished = _countTests2[1];
+
+    if (isDebug) {
+      console.debug("All ".concat(Object.keys(suites).length, " suites have started, expecting ").concat(total, " tests (of which ").concat(finished, " have already finished)"));
+    }
+
+    karma.info({
+      total: total
+    }); // Send the pending results
+
+    pendingResults.forEach(sendResult);
+    pendingResults = [];
+  } // Some suite has completed
+
+
+  function suiteComplete(result) {
+    if (result.coverage) {
+      coverageCollector.addCoverage(result.coverage);
+    } // Have all suites completed?
+
+
+    var completedSuites = suitesWithState('complete');
+
+    if (Object.keys(completedSuites).length < Object.keys(suites).length) {
+      return;
+    } // All suites have completed, send the “complete” message to karma
+
+
+    if (isDebug) {
+      var _countTests3 = countTests(),
+          _countTests4 = _slicedToArray(_countTests3, 2),
+          total = _countTests4[0],
+          finished = _countTests4[1];
+
+      console.debug("All ".concat(Object.keys(suites).length, " suites have completed, ran ").concat(finished, " of ").concat(total, " tests"));
+    }
+
+    if (result.coverage) {
+      result.coverage = coverageCollector.getFinalCoverage();
+    }
+
+    karma.complete(result);
+  }
+
+  function start() {
+    // jshint validthis: true
+    var files = Object.keys(karma.files).filter(function (file) {
+      return file.match(/\.iframe\.html$/);
+    });
+    var concurrency = parseInt(karma.config.concurrency, 10) || 10;
+    var showFrameTitle = karma.config.showFrameTitle || false;
+    var ran = 0;
+    var preparedSuites = [];
+    preparedSuites = files.map(function (file) {
+      var suite = new Suite(file, showFrameTitle);
+      suite.init(suites);
+      return suite;
+    });
+
+    if (isDebug) {
+      var debugLinks = document.createElement('div');
+      preparedSuites.forEach(function (suite) {
+        var link = document.createElement('a');
+        link.href = suite.path;
+        link.target = '_blank';
+        link.style.display = 'block';
+        link.appendChild(document.createTextNode(suite.fileName));
+        debugLinks.appendChild(link);
+      });
+      document.body.insertBefore(debugLinks, document.body.firstChild);
+    }
+
+    preparedSuites.reverse();
+
+    function runNextSuite() {
+      var suite = preparedSuites.pop();
+
+      if (!suite) {
+        return;
+      }
+
+      suite.onComplete = function () {
+        ran--;
+        runNextSuite();
+      };
+
+      suite.run();
+      ran++;
+
+      if (ran < concurrency) {
+        setTimeout(runNextSuite, 0);
+      }
+    }
+
+    runNextSuite();
+  } //
+  // Helper to collect coverages from each suite
+  // (supports only one coverage format)
+  //
+
+
+  var coverageCollector = {
+    coverages: [],
+    addCoverage: function addCoverage(coverage) {
+      this.coverages.push(coverage);
+    },
+    getFinalCoverage: function getFinalCoverage() {
+      var coverages = this.coverages;
+      return coverages.length ? this.mergeCoverages(coverages) : null;
+    },
+    mergeCoverages: function mergeCoverages(coverages) {
+      var mergedCoverage = {},
+          collector = this;
+      coverages.forEach(function (coverageBySrc) {
+        Object.keys(coverageBySrc).forEach(function (srcKey) {
+          if (!(srcKey in mergedCoverage)) {
+            mergedCoverage[srcKey] = collector.dirtyClone(coverageBySrc[srcKey]);
+            return;
+          }
+
+          var masterCoverage = mergedCoverage[srcKey],
+              coverage = coverageBySrc[srcKey]; // b - branches,
+
+          ['b'].forEach(function (prop) {
+            if (!coverage[prop]) {
+              return;
+            }
+
+            Object.keys(coverage[prop]).forEach(function (branch) {
+              if (!coverage[prop][branch]) {
+                return;
+              }
+
+              (masterCoverage[prop][branch] || []).forEach(function (value, index) {
+                masterCoverage[prop][branch][index] += (coverage[prop][branch] || [])[index] || 0;
+              });
+            });
+          }); // f - functions, s - statements
+
+          ['f', 's'].forEach(function (prop) {
+            Object.keys(masterCoverage[prop]).forEach(function (index) {
+              masterCoverage[prop][index] += (coverage[prop] || [])[index] || 0;
+            });
+          });
+        });
+      });
+      return mergedCoverage;
+    },
+    dirtyClone: function dirtyClone(object) {
+      return JSON.parse(JSON.stringify(object));
+    }
+  };
+  karma.start = start;
 })(window.__karma__);
-
